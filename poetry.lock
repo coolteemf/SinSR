@@ -1879,6 +1879,38 @@ test = ["pytest (>=7.2)", "pytest-cov (>=4.0)", "pytest-xdist (>=3.0)"]
 test-extras = ["pytest-mpl", "pytest-randomly"]
 
 [[package]]
+name = "nibabel"
+version = "5.3.3"
+description = "Access a multitude of neuroimaging data formats"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "nibabel-5.3.3-py3-none-any.whl", hash = "sha256:e8b17423ee8464da3b69e6a15799eb19f2350a7d38377026d527b6b84938adac"},
+    {file = "nibabel-5.3.3.tar.gz", hash = "sha256:8d2006b70d727fd0a798a88ae5fd64339741f436fcfc83d6ea3256cdbc51c5b7"},
+]
+
+[package.dependencies]
+importlib-resources = {version = ">=5.12", markers = "python_version < \"3.12\""}
+numpy = ">=1.22"
+packaging = ">=20"
+typing-extensions = {version = ">=4.6", markers = "python_version < \"3.13\""}
+
+[package.extras]
+all = ["h5py", "pillow", "pydicom (>=2.3)", "pyzstd (>=0.14.3)", "scipy"]
+dev = ["tox"]
+dicom = ["pydicom (>=2.3)"]
+dicomfs = ["pillow", "pydicom (>=2.3)"]
+doc = ["matplotlib (>=3.5)", "numpydoc", "sphinx", "texext", "tomli ; python_version < \"3.11\""]
+doctest = ["tox"]
+minc2 = ["h5py"]
+spm = ["scipy"]
+style = ["tox"]
+test = ["coverage (>=7.2)", "pytest", "pytest-cov", "pytest-doctestplus", "pytest-httpserver", "pytest-xdist"]
+typing = ["tox"]
+zstd = ["pyzstd (>=0.14.3)"]
+
+[[package]]
 name = "numpy"
 version = "1.26.4"
 description = "Fundamental package for array computing in Python"
@@ -4464,4 +4496,4 @@ torch = "2.1.1"
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10"
-content-hash = "11d1a38ec82c8e92e945dbb81a90d70ad575d5393a4f1ea70fc41b130c0fd6e2"
+content-hash = "7b703991afd4b8a460a256a2a5f63cc73e171c6d4bc571d820f0efe8fd2af6db"
