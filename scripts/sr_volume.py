@@ -58,7 +58,7 @@ def get_configs(colab=False):
     # Configure model paths and parameters
     configs.model.ckpt_path = str(ckpt_path)
     configs.diffusion.params.steps = 15
-    configs.diffusion.params.sf = 4
+    configs.diffusion.params.sf = 4 # Only value supported
     configs.autoencoder.ckpt_path = str(vqgan_path)
     
     return configs
@@ -192,7 +192,7 @@ def process_volume_sinsr(
     colab: bool = False,
     seed: int = 12345,
     chop_size: int = 256,
-    chop_stride: int = 224
+    chop_stride: int = 224,
 ) -> None:
     """
     Process a volume using SinSR super-resolution.
@@ -231,11 +231,9 @@ def process_volume_sinsr(
     # Get the number of slices along the specified axis
     num_slices = volume_data.shape[sampling_axis]
     print(f"\nProcessing {num_slices} slices...")
-    
-    # Storage for super-resolved slices
+
     sr_slices = []
-    
-    # Extract and process each slice
+
     for i in range(num_slices):
         # Extract slice along the specified axis
         if sampling_axis == -1 or sampling_axis == 2:
@@ -249,53 +247,65 @@ def process_volume_sinsr(
         
         # Normalize to [0, 1]
         normalized_slice = normalize_slice(slice_data, volume_data_min, volume_data_max)
-        
-        # Convert to RGB
         rgb_slice = slice_to_rgb(normalized_slice)
-        
-        # Convert to tensor and add batch dimension
-        slice_tensor = torch.from_numpy(rgb_slice).permute(2, 0, 1).unsqueeze(0).float().cuda()
-        
-        # Apply super-resolution
+        slice_tensor = (
+            torch.from_numpy(rgb_slice).permute(2, 0, 1).unsqueeze(0).float().cuda()
+        )
+
         sr_tensor = superresolve_slice_tensor(sampler, slice_tensor)
-        
-        # Convert back to numpy and extract RGB
+
+        if sf != 4:
+            orig_h, orig_w = slice_tensor.shape[2:]
+            sr_tensor = torch.nn.functional.interpolate(
+                sr_tensor,
+                size=(orig_h * sf, orig_w * sf),
+                mode="bicubic",
+                align_corners=False,
+            ).clamp(0.0, 1.0)
+
         sr_rgb = sr_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy()
         
         # Convert back to grayscale
         sr_slice = rgb_to_slice(sr_rgb)
-        
         sr_slices.append(sr_slice)
-        
+
         if (i + 1) % 10 == 0 or i == num_slices - 1:
             print(f"Processed {i + 1}/{num_slices} slices")
-    
-    # Stack super-resolved slices
+
     print("\nAssembling super-resolved volume...")
-    sr_slices = np.stack(sr_slices, axis=-1)
-    
     # Re-scale back to original value range
+    
+    if sampling_axis == 0:
+        sr_volume = np.stack(sr_slices, axis=0)
+    elif sampling_axis == 1:
+        sr_volume = np.stack(sr_slices, axis=1)
+    else:
+        sr_volume = np.stack(sr_slices, axis=-1)
+
     original_min = volume_data.min()
     original_max = volume_data.max()
-    sr_volume = sr_slices * (original_max - original_min) + original_min
-    
+    sr_volume = sr_volume * (original_max - original_min) + original_min
+
     print(f"Super-resolved volume shape: {sr_volume.shape}")
     print(f"Super-resolved value range: [{sr_volume.min():.4f}, {sr_volume.max():.4f}]")
-    
-    # Adjust affine matrix for super-resolution
+
     print("\nAdjusting affine matrix...")
     sr_affine = affine.copy()
-    # The upsampling affects the first two dimensions (height and width)
-    # We divide the corresponding column(s) by the scaling factor
-    sr_affine[0, 0] /= sf  # Width scaling
-    sr_affine[1, 1] /= sf  # Height scaling
-    
-    # Save the super-resolved volume
+
+    if sampling_axis == 0:
+        sr_affine /= sf
+        sr_affine /= sf
+    elif sampling_axis == 1:
+        sr_affine /= sf
+        sr_affine /= sf
+    else:
+        sr_affine /= sf
+        sr_affine /= sf
+
     print(f"\nSaving super-resolved volume to: {output_path}")
     save_volume(sr_volume, output_path, affine=sr_affine, header=header)
-    
-    print("\nVolume super-resolution complete!")
 
+    print("\nVolume super-resolution complete!")
 
 def main():
     parser = argparse.ArgumentParser(
