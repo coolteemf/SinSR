@@ -21,6 +21,7 @@ from omegaconf import OmegaConf
 
 from sampler import Sampler
 from basicsr.utils.download_util import load_file_from_url
+from utils.util_image import ImageSpliterTh
 
 
 def get_configs(colab=False):
@@ -157,28 +158,35 @@ def save_volume(volume: np.ndarray, filename: str, affine: Optional[np.ndarray] 
 
 
 def superresolve_slice_tensor(sampler: Sampler, slice_tensor: torch.Tensor) -> torch.Tensor:
-    """
-    Apply SinSR super-resolution to a slice tensor.
+    # slice_tensor: 1 x 3 x H x W tensor in [0, 1] range (RGB)  
+    if slice_tensor.shape[-2] > sampler.chop_size and slice_tensor.shape[-1] > sampler.chop_size:
+        im_spliter = ImageSpliterTh(
+            slice_tensor,
+            sampler.chop_size,
+            stride=sampler.chop_stride,
+            sf=sampler.sf,
+            extra_bs=sampler.chop_bs,
+        )
+        for im_lq_pch, index_infos in im_spliter:
+            # Convert from [0, 1] to [-1, 1] as expected by the model
+            im_lq_pch_norm = (im_lq_pch - 0.5) / 0.5
+            im_sr_pch = sampler.sample_func(
+                im_lq_pch_norm,
+                noise_repeat=False,
+                one_step=True,
+                apply_decoder=True
+            )
+            im_spliter.update(im_sr_pch.detach(), index_infos)
+        sr_tensor = im_spliter.gather()
+    else:
+        slice_tensor_norm = (slice_tensor - 0.5) / 0.5
+        sr_tensor = sampler.sample_func(
+            slice_tensor_norm,
+            noise_repeat=False,
+            one_step=True,
+            apply_decoder=True
+        )
     
-    Args:
-        sampler: SinSR Sampler instance
-        slice_tensor: 1 x 3 x H x W tensor in [0, 1] range (RGB)
-        
-    Returns:
-        Super-resolved tensor in [0, 1] range
-    """
-    # Convert from [0, 1] to [-1, 1] as expected by the model
-    slice_tensor_norm = (slice_tensor - 0.5) / 0.5
-    
-    # Apply super-resolution
-    sr_tensor = sampler.sample_func(
-        slice_tensor_norm,
-        noise_repeat=False,
-        one_step=True,  # SinSR uses single step
-        apply_decoder=True
-    )
-    
-    # Convert back from [-1, 1] to [0, 1]
     sr_tensor = sr_tensor * 0.5 + 0.5
     
     return sr_tensor.clamp(0.0, 1.0)
@@ -291,16 +299,12 @@ def process_volume_sinsr(
 
     print("\nAdjusting affine matrix...")
     sr_affine = affine.copy()
-
-    if sampling_axis == 0:
-        sr_affine /= sf
-        sr_affine /= sf
-    elif sampling_axis == 1:
-        sr_affine /= sf
-        sr_affine /= sf
-    else:
-        sr_affine /= sf
-        sr_affine /= sf
+    # Map sampling_axis (-1 → 2) to a concrete index
+    axis = sampling_axis if sampling_axis != -1 else (volume_data.ndim - 1)
+    # Scale only the two in-plane axes; leave the slice axis untouched
+    for col in range(3):
+        if col != axis:
+            sr_affine[:3, col] /= sf
 
     print(f"\nSaving super-resolved volume to: {output_path}")
     save_volume(sr_volume, output_path, affine=sr_affine, header=header)
