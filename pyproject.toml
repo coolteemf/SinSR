@@ -8,8 +8,7 @@ license = "LICENSE"
 packages = [{include = "basicsr"}, {include = "ldm"}, {include = "models"}, {include = "utils"}, {include = "datapipe"}]
 
 [tool.poetry.dependencies]
-python = "^3.10"
-torch = "2.1.1"
+python = ">=3.10,<3.12"
 numpy = "^1.24.0"
 opencv-python = ">=4.8.0"
 matplotlib = ">=3.7.0"
@@ -28,8 +27,12 @@ einops = ">=0.7.0"
 imageio = ">=2.31.0"
 scipy = ">=1.9.0"
 gradio = "3.50.0"
-xformers = "0.0.23"
 nibabel = "^5.3.3"
+diffusers = "^0.36.0"
+torch = "^2.10.0"
+xformers = "^0.0.34"
+transformers = "^5.1.0"
+typer = "^0.23.0"
 
 [[tool.poetry.source]]
 name = "pytorch"
