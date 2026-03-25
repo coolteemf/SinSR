@@ -22,7 +22,8 @@ from omegaconf import OmegaConf
 from sampler import Sampler
 from basicsr.utils.download_util import load_file_from_url
 from utils.util_image import ImageSpliterTh
-
+from skimage.io import imsave
+from os.path import splitext
 
 def get_configs(colab=False):
     """Load SinSR configuration and prepare checkpoints."""
@@ -156,7 +157,8 @@ def save_volume(volume: np.ndarray, filename: str, affine: Optional[np.ndarray] 
     nib.save(img, filename)
     print(f"Saved: {filename}")
 
-
+@torch.autocast(device_type="cuda", dtype=torch.bfloat16)
+@torch.no_grad()
 def superresolve_slice_tensor(sampler: Sampler, slice_tensor: torch.Tensor) -> torch.Tensor:
     # slice_tensor: 1 x 3 x H x W tensor in [0, 1] range (RGB)  
     if slice_tensor.shape[-2] > sampler.chop_size and slice_tensor.shape[-1] > sampler.chop_size:
@@ -272,9 +274,20 @@ def process_volume_sinsr(
             ).clamp(0.0, 1.0)
 
         sr_rgb = sr_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy()
+        del sr_tensor, slice_tensor
+        torch.cuda.empty_cache()
         
         # Convert back to grayscale
         sr_slice = rgb_to_slice(sr_rgb)
+
+        stem, ext = splitext(output_path)
+        if (i + 1) % (num_slices // 10) == 0 or i == 10 or i == 0 or i == 20:
+            slice_pth = f"{stem}_slice{i}.png"
+            sr_slice_save = (sr_slice - sr_slice.min()) / (sr_slice.max() - sr_slice.min())
+            sr_slice_save = (sr_slice_save * 255).astype(np.uint8)
+            imsave(slice_pth, sr_slice_save)
+            print(f"Saved slice to {slice_pth}")
+
         sr_slices.append(sr_slice)
 
         if (i + 1) % 10 == 0 or i == num_slices - 1:

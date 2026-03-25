@@ -38,8 +38,9 @@ def main():
             volume_path=file_path,
             output_path=output_name,
             sf=2,
-            chop_size=128,
-            chop_stride=112
+            chop_size=256,
+            chop_stride=224,
+            sampling_axis=1
         )
 
 if __name__ == "__main__":
